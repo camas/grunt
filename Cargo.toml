@@ -11,3 +11,6 @@ ring = "*" # Hash functions
 directories = "*" # Special directory locations
 lazy_static = "*" # Initialize static variables
 dialoguer = "*" # Terminal dialogues
+# Json read/write
+serde_json = "*" 
+serde = { version = "*", features = ["derive"] }

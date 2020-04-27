@@ -1,10 +1,15 @@
+use serde::{Deserialize, Serialize};
+use std::fs::File;
 use std::path::Path;
 
-pub struct Settings {}
+#[derive(Serialize, Deserialize)]
+pub struct Settings {
+    default_dir: Option<String>,
+}
 
 impl Default for Settings {
     fn default() -> Self {
-        todo!();
+        Settings { default_dir: None }
     }
 }
 
@@ -16,7 +21,9 @@ impl Settings {
 
     /// Loads settings from a file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Self {
-        todo!();
+        let file = File::open(path).expect("Error opening settings file");
+        let reader = std::io::BufReader::new(file);
+        serde_json::from_reader::<_, Settings>(reader).expect("Error reading settings as json")
     }
 
     /// Loads settings from a file if it exists or uses default values
@@ -29,7 +36,9 @@ impl Settings {
         }
     }
 
-    pub fn save<P: AsRef<Path>>(path: P) {
-        todo!();
+    pub fn save<P: AsRef<Path>>(&self, path: P) {
+        let file = File::create(path).expect("Error creating settings file");
+        let writer = std::io::BufWriter::new(file);
+        serde_json::to_writer_pretty(writer, self).expect("Error writing settings");
     }
 }
