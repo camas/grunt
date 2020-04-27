@@ -1,9 +1,17 @@
 [package]
 name = "grunt"
+description = "WoW Addon Manager+"
 version = "0.1.0"
 authors = ["camas <camas@users.noreply.github.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+# Logging
+log = "*"
+simplelog = "*"
+
+clap = "*" # Argument parsing
+ring = "*" # Hash functions
+directories = "*" # Special directory locations
+lazy_static = "*" # Initialize static variables
+dialoguer = "*" # Terminal dialogues
