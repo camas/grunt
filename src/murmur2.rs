@@ -33,9 +33,9 @@ mod tests {
 
     #[test]
     fn test_hash() {
+        // Tests known result
         let data = b"##Interface:80300##Title:|cff00ff00TradeSkillMaster_AppHelper|r##Notes:ActsasaconnectionbetweentheTSMaddonandapp.##Author:TSMTeam##Version:v4.0.8##SavedVariables:TradeSkillMaster_AppHelperDB##Dependency:TradeSkillMasterTradeSkillMaster_AppHelper.luaAppData.lua";
-        let res1 = calculate_hash(data, 1);
-
-        assert_eq!(res1, 851_628_572);
+        let res = calculate_hash(data, 1);
+        assert_eq!(res, 851_628_572);
     }
 }
