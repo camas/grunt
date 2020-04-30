@@ -11,6 +11,12 @@ ring = "*" # Hash functions
 directories = "*" # Special directory locations
 lazy_static = "*" # Initialize static variables
 dialoguer = "*" # Terminal dialogues
+getset = "*" # Getters/setters
+reqwest = { version = "*", features = ["blocking", "json", "gzip"] } # HTTP Requests
+rayon = "*" # Simple parallelization
+regex = "*" # Regex
+fancy-regex = "*" # Regex with backtracking
+glob = "*" # Globs
 # Json read/write
 serde_json = "*" 
 serde = { version = "*", features = ["derive"] }

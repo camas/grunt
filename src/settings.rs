@@ -1,15 +1,23 @@
+use getset::{Getters, Setters};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::path::Path;
 
-#[derive(Serialize, Deserialize)]
+static CURRENT_VERSION: u32 = 1;
+
+#[derive(Serialize, Deserialize, Getters, Setters)]
+#[getset(get = "pub", set = "pub")]
 pub struct Settings {
+    version: u32,
     default_dir: Option<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { default_dir: None }
+        Settings {
+            version: CURRENT_VERSION,
+            default_dir: None,
+        }
     }
 }
 
