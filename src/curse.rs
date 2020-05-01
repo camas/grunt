@@ -22,11 +22,11 @@ impl CurseAPI {
     }
 
     pub fn get_game_info(&self, game_id: i32) -> GameInfo {
-        self.make_request::<_, (), GameInfo>(format!("game/{}", game_id), None)
+        self.make_request::<(), GameInfo>(&format!("game/{}", game_id), None)
     }
 
     pub fn fingerprint_search(&self, fingerprints: &[u32]) -> FingerprintInfo {
-        let info = self.make_request::<_, _, FingerprintInfo>("fingerprint", Some(fingerprints));
+        let info = self.make_request::<_, FingerprintInfo>("fingerprint", Some(fingerprints));
         assert!(info
             .partial_match_fingerprints
             .as_object()
@@ -35,16 +35,12 @@ impl CurseAPI {
         info
     }
 
-    fn make_request<S, P, Q>(&self, endpoint: S, data: Option<P>) -> Q
+    fn make_request<P, Q>(&self, endpoint: &str, data: Option<P>) -> Q
     where
-        S: AsRef<str>,
         P: Serialize,
         Q: DeserializeOwned,
     {
-        let url = format!(
-            "https://addons-ecs.forgesvc.net/api/v2/{}",
-            endpoint.as_ref()
-        );
+        let url = format!("https://addons-ecs.forgesvc.net/api/v2/{}", endpoint);
 
         let resp = match data {
             Some(data) => self.client.post(&url).json(&data).send(),
