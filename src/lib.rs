@@ -157,23 +157,22 @@ impl Grunt {
                 }
             }
         }
+        self.addons.extend(new_addons);
+        let untracked = self.find_untracked();
 
         // Curse
-        let (curse_addons, untracked) = self.resolve_curse(untracked);
+        let curse_addons = self.resolve_curse(untracked);
         for addon in curse_addons.iter() {
             prog(ResolveProgress::NewAddon {
                 name: addon.name().clone(),
                 desc: addon.desc_string(),
             })
         }
-        new_addons.extend(curse_addons);
-
-        // Update Grub addons
-        self.addons.extend(new_addons);
+        self.addons.extend(curse_addons);
 
         // Finish
         prog(ResolveProgress::Finished {
-            not_found: untracked,
+            not_found: self.find_untracked(),
         });
     }
 
@@ -207,7 +206,7 @@ impl Grunt {
                 .unwrap_or_else(|| panic!("Couldn't find addon {}", name));
             let addon = self.addons.remove(addon_index);
             addon.dirs().iter().for_each(|dir| {
-                std::fs::remove_dir_all(dir).expect("Error deleting addon dir");
+                std::fs::remove_dir_all(self.root_dir.join(dir)).expect("Error deleting addon dir");
             })
         }
     }
@@ -220,7 +219,7 @@ impl Grunt {
         self.curse_api.as_ref().unwrap()
     }
 
-    fn resolve_curse(&mut self, untracked: Vec<String>) -> (Vec<Addon>, Vec<String>) {
+    fn resolve_curse(&mut self, untracked: Vec<String>) -> Vec<Addon> {
         // Get curse info for WoW
         let game_info = self.get_api().get_game_info(WOW_GAME_ID);
 
@@ -345,7 +344,7 @@ impl Grunt {
         // Query api for fingerprint matches
         let results = self.get_api().fingerprint_search(&fingerprints);
 
-        let addons = results
+        results
             .exact_matches
             .iter()
             .map(|mat| {
@@ -357,9 +356,7 @@ impl Grunt {
                 let name = untracked[index].clone();
                 Addon::from_curse_info(name, mat)
             })
-            .collect();
-
-        (addons, self.find_untracked())
+            .collect()
     }
 }
 
