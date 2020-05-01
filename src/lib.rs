@@ -1,10 +1,8 @@
 use self::addon::Addon;
 use self::curse::{CurseAPI, WOW_GAME_ID};
 use self::lockfile::Lockfile;
-use directories::ProjectDirs;
 use fancy_regex::Regex;
 use getset::{Getters, Setters};
-use lazy_static::lazy_static;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
@@ -17,18 +15,6 @@ pub mod settings;
 mod curse;
 mod lockfile;
 mod murmur2;
-
-lazy_static! {
-    static ref PROJECT_DIRS: ProjectDirs = {
-        let dirs = ProjectDirs::from("", "", "grunt").expect("Couldn't find project dirs");
-        std::fs::create_dir_all(dirs.data_dir()).expect("Couldn't create data directory");
-        dirs
-    };
-}
-
-pub fn get_project_dirs() -> &'static ProjectDirs {
-    &PROJECT_DIRS
-}
 
 #[derive(Getters, Setters)]
 #[getset(get = "pub", set = "pub")]

@@ -1,7 +1,8 @@
 use clap::{clap_app, crate_description, crate_version, AppSettings};
 use dialoguer;
+use directories::ProjectDirs;
 use grunt::settings::Settings;
-use grunt::{get_project_dirs, Grunt};
+use grunt::Grunt;
 
 /// Parses inputs and initializes grunt
 fn main() {
@@ -34,8 +35,12 @@ fn main() {
     // Parse args
     let matches = app.get_matches();
 
+    // Init project dirs
+    let project_dirs = ProjectDirs::from("", "", "grunt").expect("Couldn't find project dirs");
+    std::fs::create_dir_all(project_dirs.data_dir()).expect("Couldn't create data directory");
+
     // Create directories if they don't exist
-    let config_dir = get_project_dirs().config_dir();
+    let config_dir = project_dirs.config_dir();
     if !config_dir.exists() {
         std::fs::create_dir(config_dir).expect("Error creating config dir");
     }

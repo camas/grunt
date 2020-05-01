@@ -9,7 +9,6 @@ edition = "2018"
 clap = "*" # Argument parsing
 ring = "*" # Hash functions
 directories = "*" # Special directory locations
-lazy_static = "*" # Initialize static variables
 dialoguer = "*" # Terminal dialogues
 getset = "*" # Getters/setters
 reqwest = { version = "*", features = ["blocking", "json", "gzip"] } # HTTP Requests
