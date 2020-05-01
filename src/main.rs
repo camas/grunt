@@ -24,6 +24,7 @@ fn main() {
         )
         (@subcommand remove =>
             (about: "Remove addon(s)")
+            (@arg addons: +multiple "The addons to remove")
         )
         (@subcommand tsm =>
             (about: "Update TSM auction data")
@@ -96,6 +97,41 @@ fn main() {
                 }
             };
             grunt.resolve(prog_func);
+            grunt.save_lockfile();
+        }
+        ("remove", matches) => {
+            // Remove
+            let to_remove: Vec<String> =
+                if let Some(addon_names) = matches.unwrap().values_of("addons") {
+                    // Get addon names from cli arguments
+                    addon_names.map(|s| s.to_string()).collect()
+                } else {
+                    // Get addon names via a multiselect dialogue
+                    let mut options: Vec<&String> =
+                        grunt.addons().iter().map(|addon| addon.name()).collect();
+                    options.sort();
+                    let result = dialoguer::MultiSelect::new()
+                        .with_prompt("Addons to remove")
+                        .items(&options)
+                        .paged(true)
+                        .interact()
+                        .unwrap();
+                    if result.is_empty() {
+                        return;
+                    }
+                    let is_sure = dialoguer::Confirm::new()
+                        .with_prompt("Are you sure?")
+                        .interact()
+                        .unwrap();
+                    if !is_sure {
+                        return;
+                    }
+                    result.iter().map(|&i| options[i].to_string()).collect()
+                };
+            // Remove addons
+            grunt.remove_addons(&to_remove);
+
+            // Save
             grunt.save_lockfile();
         }
         _ => println!("No matched command"),

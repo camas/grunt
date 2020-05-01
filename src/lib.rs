@@ -11,9 +11,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
+pub mod addon;
 pub mod settings;
 
-mod addon;
 mod curse;
 mod lockfile;
 mod murmur2;
@@ -190,6 +190,26 @@ impl Grunt {
     /// Check that two addons don't claim the same directory
     pub fn check_conflicts(&self) {
         todo!();
+    }
+
+    pub fn get_addon(&self, name: &str) -> Option<&Addon> {
+        self.addons.iter().find(|addon| addon.name() == name)
+    }
+
+    /// Removes all the addons with the specified names
+    /// Panics if an addon not found
+    pub fn remove_addons(&mut self, names: &[String]) {
+        for name in names {
+            let addon_index = self
+                .addons
+                .iter()
+                .position(|addon| addon.name() == name)
+                .unwrap_or_else(|| panic!("Couldn't find addon {}", name));
+            let addon = self.addons.remove(addon_index);
+            addon.dirs().iter().for_each(|dir| {
+                std::fs::remove_dir_all(dir).expect("Error deleting addon dir");
+            })
+        }
     }
 
     /// Initializes the curse api if not initialized and returns it

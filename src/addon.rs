@@ -2,7 +2,7 @@ use crate::curse;
 use crate::lockfile::AddonInfo;
 use getset::{Getters, Setters};
 
-#[derive(Getters, Setters)]
+#[derive(PartialEq, Getters, Setters)]
 #[getset(get = "pub", set = "pub")]
 pub struct Addon {
     name: String,
@@ -59,7 +59,7 @@ impl Addon {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum AddonType {
     Unknown,
     Curse,
