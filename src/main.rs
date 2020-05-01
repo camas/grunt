@@ -75,8 +75,9 @@ fn main() {
     println!();
 
     // Run command
+    // Always save lockfile after every command that makes changes to addons
     match matches.subcommand() {
-        ("setdir", _) => {} // Implemented further up
+        ("setdir", _) => (), // Implemented further up
         ("update", _) => grunt.update_addons(),
         ("resolve", _) => {
             // Resolve
@@ -97,6 +98,26 @@ fn main() {
                 }
             };
             grunt.resolve(prog_func);
+
+            // Check conflicts
+            let conflicts = grunt.check_conflicts();
+            if !conflicts.is_empty() {
+                println!("\x1B[1mError: Conflicting addons found!\x1B[0m");
+                println!("{:16} {:16} {:16}", "Directory", "Addon", "Addon");
+                for conflict in conflicts {
+                    let addon_a = &grunt.addons()[conflict.addon_a_index];
+                    let addon_b = &grunt.addons()[conflict.addon_b_index];
+                    println!(
+                        "{:16} {:16} {:16}",
+                        conflict.dir,
+                        addon_a.name(),
+                        addon_b.name()
+                    );
+                }
+                println!();
+            }
+
+            // Save
             grunt.save_lockfile();
         }
         ("remove", matches) => {

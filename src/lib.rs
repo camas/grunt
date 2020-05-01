@@ -187,8 +187,24 @@ impl Grunt {
     }
 
     /// Check that two addons don't claim the same directory
-    pub fn check_conflicts(&self) {
-        todo!();
+    pub fn check_conflicts(&self) -> Vec<Conflict> {
+        let mut conflicts = Vec::new();
+        for (i, addon) in self.addons.iter().enumerate() {
+            for (j, other) in self.addons.iter().enumerate().skip(i + 1) {
+                // Check no match between dirs
+                for dir in addon.dirs() {
+                    if other.dirs().contains(dir) {
+                        let conflict = Conflict {
+                            addon_a_index: i,
+                            addon_b_index: j,
+                            dir: dir.clone(),
+                        };
+                        conflicts.push(conflict);
+                    }
+                }
+            }
+        }
+        conflicts
     }
 
     pub fn get_addon(&self, name: &str) -> Option<&Addon> {
@@ -358,6 +374,12 @@ impl Grunt {
             })
             .collect()
     }
+}
+
+pub struct Conflict {
+    pub addon_a_index: usize,
+    pub addon_b_index: usize,
+    pub dir: String,
 }
 
 pub enum ResolveProgress {
