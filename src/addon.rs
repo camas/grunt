@@ -54,6 +54,28 @@ impl Addon {
         }
     }
 
+    /// Initialize using default values for addon `TradeSkillMaster`
+    pub fn init_tsm() -> Self {
+        let tsm_string = "TradeSkillMaster";
+        Addon {
+            name: tsm_string.to_string(),
+            addon_type: AddonType::TSM,
+            addon_id: "TradeSkillMaster".to_string(),
+            dirs: vec![tsm_string.to_string()],
+        }
+    }
+
+    /// Initialize using default values for addon `TradeSkillMaster_AppHelper`
+    pub fn init_tsm_helper() -> Self {
+        let tsm_helper_string = "TradeSkillMaster_AppHelper";
+        Addon {
+            name: tsm_helper_string.to_string(),
+            addon_type: AddonType::TSM,
+            addon_id: "AppHelper".to_string(),
+            dirs: vec![tsm_helper_string.to_string()],
+        }
+    }
+
     pub fn desc_string(&self) -> String {
         format!("{:?}:{}", self.addon_type, self.addon_id)
     }
@@ -64,4 +86,6 @@ pub enum AddonType {
     Unknown,
     Curse,
     Tukui,
+    TSM,
+    TSMAppHelper,
 }

@@ -1,4 +1,4 @@
-use self::addon::Addon;
+use self::addon::{Addon, AddonType};
 use self::curse::{CurseAPI, WOW_GAME_ID};
 use self::lockfile::Lockfile;
 use fancy_regex::Regex;
@@ -85,13 +85,36 @@ impl Grunt {
 
     /// Attempts to resolve untracked addons
     /// Adds any found to the lockfile
-    /// Returns a vec of references to the addons found
+    /// Progress is reported using `prog`
     pub fn resolve<F>(&mut self, mut prog: F)
     where
         F: FnMut(ResolveProgress),
     {
         let untracked = self.find_untracked();
         let mut new_addons = Vec::new();
+
+        // Check for TSM addons
+        let tsm_string = "TradeSkillMaster";
+        let tsm_dir = self.root_dir.join(tsm_string);
+        if untracked.contains(&tsm_string.to_string()) && tsm_dir.exists() {
+            let tsm_addon = Addon::init_tsm();
+            prog(ResolveProgress::NewAddon {
+                name: tsm_string.to_string(),
+                desc: tsm_addon.desc_string(),
+            });
+            self.addons.push(tsm_addon);
+        }
+        let tsm_helper_string = "TradeSkillMaster_AppHelper";
+        let tsm_helper_dir = self.root_dir.join(tsm_helper_string);
+        if untracked.contains(&tsm_helper_string.to_string()) && tsm_helper_dir.exists() {
+            let tsm_helper_addon = Addon::init_tsm_helper();
+            prog(ResolveProgress::NewAddon {
+                name: tsm_helper_string.to_string(),
+                desc: tsm_helper_addon.desc_string(),
+            });
+            self.addons.push(tsm_helper_addon);
+        }
+        let untracked = self.find_untracked();
 
         // Get addon information from `{Addon}.toc` if it is there
         let tukui_id_string = "## X-Tukui-ProjectID:";
