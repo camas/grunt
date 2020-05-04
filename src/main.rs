@@ -34,6 +34,9 @@ fn main() {
         (@subcommand tsm =>
             (about: "Update TSM auction data")
         )
+        (@subcommand list =>
+            (about: "List addons and untracked dirs")
+        )
     );
 
     // Parse args
@@ -174,6 +177,20 @@ fn main() {
             } else {
                 println!("No directories specified");
             }
+        }
+        ("list", _) => {
+            let addons = grunt.addons();
+            let mut addon_strings: Vec<String> = addons
+                .iter()
+                .map(|addon| format!("{:32} {}", addon.name(), addon.desc_string()))
+                .collect();
+            addon_strings.sort();
+            println!("\x1B[1m{} Addons:\x1B[0m", addon_strings.len());
+            addon_strings.iter().for_each(|s| println!("{}", s));
+
+            let untracked = grunt.find_untracked();
+            println!("\x1B[1m{} Untracked:\x1B[0m", untracked.len());
+            untracked.iter().for_each(|s| println!("{}", s));
         }
         _ => println!("No matched command"),
     }
