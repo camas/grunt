@@ -12,6 +12,7 @@ pub struct Addon {
 }
 
 impl Addon {
+    /// Initialize using the information from an `AddonInfo`
     pub fn from_info(info: AddonInfo) -> Self {
         Addon {
             name: info.name,
@@ -21,6 +22,7 @@ impl Addon {
         }
     }
 
+    /// Create an `AddonInfo` using this addon's info
     pub fn to_info(&self) -> AddonInfo {
         AddonInfo {
             name: self.name.clone(),
@@ -30,6 +32,7 @@ impl Addon {
         }
     }
 
+    /// Initialize a Curse addon using the information from a curse api response
     pub fn from_curse_info(dir_name: String, info: &curse::AddonInfo) -> Self {
         let dirs = info
             .file
@@ -45,6 +48,7 @@ impl Addon {
         }
     }
 
+    /// Initialize a tukui addon using the provided `id` and `dirs`
     pub fn from_tukui_info(name: String, id: i64, dirs: Vec<String>) -> Self {
         Addon {
             name,
@@ -76,6 +80,7 @@ impl Addon {
         }
     }
 
+    /// Returns a short type:id string
     pub fn desc_string(&self) -> String {
         format!("{:?}:{}", self.addon_type, self.addon_id)
     }

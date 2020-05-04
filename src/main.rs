@@ -27,6 +27,10 @@ fn main() {
             (about: "Remove addon(s)")
             (@arg addons: +multiple "The addons to remove")
         )
+        (@subcommand rmdir =>
+            (about: "Remove untracked directories")
+            (@arg addons: +multiple "The directories to remove")
+        )
         (@subcommand tsm =>
             (about: "Update TSM auction data")
         )
@@ -159,6 +163,17 @@ fn main() {
 
             // Save
             grunt.save_lockfile();
+        }
+        ("rmdir", matches) => {
+            if let Some(dir_names) = matches.unwrap().values_of("addons") {
+                // Get addon names from cli arguments
+                let dirs: Vec<String> = dir_names.map(|s| s.to_string()).collect();
+                let len = dirs.len();
+                grunt.remove_dirs(dirs);
+                println!("Deleted {} directories", len);
+            } else {
+                println!("No directories specified");
+            }
         }
         _ => println!("No matched command"),
     }

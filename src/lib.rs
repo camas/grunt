@@ -236,6 +236,19 @@ impl Grunt {
         }
     }
 
+    /// Deletes top-level directories and their contents if they are untracked
+    pub fn remove_dirs(&self, dirs: Vec<String>) {
+        let untracked = self.find_untracked();
+        let root = self.root_dir();
+        for dir in dirs {
+            if !untracked.contains(&dir) {
+                panic!("{} is a tracked directory", dir);
+            }
+            let path = root.join(dir);
+            std::fs::remove_dir_all(path).expect("Error deleting the contents of ");
+        }
+    }
+
     /// Initializes the curse api if not initialized and returns it
     fn get_api(&mut self) -> &CurseAPI {
         if self.curse_api.is_none() {
