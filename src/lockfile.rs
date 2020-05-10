@@ -35,5 +35,6 @@ pub struct AddonInfo {
     pub name: String,
     pub addon_type: AddonType,
     pub addon_id: String,
+    pub version: String,
     pub dirs: Vec<String>,
 }

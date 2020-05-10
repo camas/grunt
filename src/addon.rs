@@ -8,6 +8,8 @@ pub struct Addon {
     name: String,
     addon_type: AddonType,
     addon_id: String,
+    /// Internal string used to check for updates
+    version: String,
     dirs: Vec<String>,
 }
 
@@ -18,6 +20,7 @@ impl Addon {
             name: info.name,
             addon_type: info.addon_type,
             addon_id: info.addon_id,
+            version: info.version,
             dirs: info.dirs,
         }
     }
@@ -28,12 +31,13 @@ impl Addon {
             name: self.name.clone(),
             addon_type: self.addon_type.clone(),
             addon_id: self.addon_id.clone(),
+            version: self.version.clone(),
             dirs: self.dirs.clone(),
         }
     }
 
     /// Initialize a Curse addon using the information from a curse api response
-    pub fn from_curse_info(dir_name: String, info: &curse::AddonInfo) -> Self {
+    pub fn from_curse_info(dir_name: String, info: &curse::AddonFingerprintInfo) -> Self {
         let dirs = info
             .file
             .modules
@@ -44,38 +48,42 @@ impl Addon {
             name: dir_name,
             addon_type: AddonType::Curse,
             addon_id: info.id.to_string(),
+            version: info.file.id.to_string(),
             dirs,
         }
     }
 
     /// Initialize a tukui addon using the provided `id` and `dirs`
-    pub fn from_tukui_info(name: String, id: i64, dirs: Vec<String>) -> Self {
+    pub fn from_tukui_info(name: String, id: i64, dirs: Vec<String>, version: String) -> Self {
         Addon {
             name,
             addon_type: AddonType::Tukui,
             addon_id: id.to_string(),
+            version,
             dirs,
         }
     }
 
     /// Initialize using default values for addon `TradeSkillMaster`
-    pub fn init_tsm() -> Self {
+    pub fn init_tsm(version: String) -> Self {
         let tsm_string = "TradeSkillMaster";
         Addon {
             name: tsm_string.to_string(),
             addon_type: AddonType::TSM,
             addon_id: "TradeSkillMaster".to_string(),
+            version,
             dirs: vec![tsm_string.to_string()],
         }
     }
 
     /// Initialize using default values for addon `TradeSkillMaster_AppHelper`
-    pub fn init_tsm_helper() -> Self {
+    pub fn init_tsm_helper(version: String) -> Self {
         let tsm_helper_string = "TradeSkillMaster_AppHelper";
         Addon {
             name: tsm_helper_string.to_string(),
             addon_type: AddonType::TSM,
             addon_id: "AppHelper".to_string(),
+            version,
             dirs: vec![tsm_helper_string.to_string()],
         }
     }
@@ -88,9 +96,7 @@ impl Addon {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum AddonType {
-    Unknown,
     Curse,
     Tukui,
     TSM,
-    TSMAppHelper,
 }

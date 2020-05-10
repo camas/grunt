@@ -19,3 +19,6 @@ glob = "*" # Globs
 # Json read/write
 serde_json = "*" 
 serde = { version = "*", features = ["derive"] }
+tempfile = "*" # Temporary files
+zip = "*" # Zip files
+walkdir = "*" # Directory traversal

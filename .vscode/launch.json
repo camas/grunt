@@ -44,5 +44,25 @@
             ],
             "cwd": "${workspaceFolder}"
         },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug 'update' command",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=grunt",
+                    "--package=grunt"
+                ],
+                "filter": {
+                    "name": "grunt",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "update"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
     ]
 }

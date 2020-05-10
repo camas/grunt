@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::thread;
 
 pub mod addon;
 pub mod settings;
@@ -23,7 +24,7 @@ pub struct Grunt {
     root_dir: PathBuf,
     lockfile_path: PathBuf,
     addons: Vec<Addon>,
-    curse_api: Option<CurseAPI>,
+    curse_api: CurseAPI,
 }
 
 impl Grunt {
@@ -54,7 +55,7 @@ impl Grunt {
             lockfile_path,
             is_new,
             addons,
-            curse_api: None,
+            curse_api: CurseAPI::init(),
         }
     }
 
@@ -97,7 +98,8 @@ impl Grunt {
         let tsm_string = "TradeSkillMaster";
         let tsm_dir = self.root_dir.join(tsm_string);
         if untracked.contains(&tsm_string.to_string()) && tsm_dir.exists() {
-            let tsm_addon = Addon::init_tsm();
+            let version = get_toc_version(tsm_dir.join("TradeSkillMaster.toc"));
+            let tsm_addon = Addon::init_tsm(version);
             prog(ResolveProgress::NewAddon {
                 name: tsm_string.to_string(),
                 desc: tsm_addon.desc_string(),
@@ -107,7 +109,8 @@ impl Grunt {
         let tsm_helper_string = "TradeSkillMaster_AppHelper";
         let tsm_helper_dir = self.root_dir.join(tsm_helper_string);
         if untracked.contains(&tsm_helper_string.to_string()) && tsm_helper_dir.exists() {
-            let tsm_helper_addon = Addon::init_tsm_helper();
+            let version = get_toc_version(tsm_helper_dir.join("TradeSkillMaster_AppHelper.toc"));
+            let tsm_helper_addon = Addon::init_tsm_helper(version);
             prog(ResolveProgress::NewAddon {
                 name: tsm_helper_string.to_string(),
                 desc: tsm_helper_addon.desc_string(),
@@ -119,6 +122,7 @@ impl Grunt {
         // Get addon information from `{Addon}.toc` if it is there
         let tukui_id_string = "## X-Tukui-ProjectID:";
         let tukui_project_string = "## X-Tukui-ProjectFolders:";
+        let version_string = "## Version:";
         for dir in &untracked {
             // Get the path to the .toc for each addon
             let toc = self.root_dir.join(&dir).join(format!("{}.toc", dir));
@@ -133,6 +137,7 @@ impl Grunt {
             // Loop through every line checking for relevant ones
             let mut tukui_id = None;
             let mut tukui_dirs = None;
+            let mut version = None;
             for line in reader.lines() {
                 let line = line.expect("Error reading .toc");
                 if line.starts_with(tukui_id_string) {
@@ -149,18 +154,25 @@ impl Grunt {
                             .map(|s| s.trim().to_string())
                             .collect::<Vec<String>>(),
                     );
+                } else if line.starts_with(version_string) {
+                    version = Some(line[version_string.len()..].trim().to_string())
                 }
             }
 
             // Check if tukui info found
             if let Some(tukui_id) = tukui_id {
                 if let Some(tukui_dirs) = tukui_dirs {
-                    let addon = Addon::from_tukui_info(dir.clone(), tukui_id, tukui_dirs);
-                    prog(ResolveProgress::NewAddon {
-                        name: dir.clone(),
-                        desc: addon.desc_string(),
-                    });
-                    new_addons.push(addon);
+                    if let Some(version) = version {
+                        let addon =
+                            Addon::from_tukui_info(dir.clone(), tukui_id, tukui_dirs, version);
+                        prog(ResolveProgress::NewAddon {
+                            name: dir.clone(),
+                            desc: addon.desc_string(),
+                        });
+                        new_addons.push(addon);
+                    } else {
+                        panic!("Missing addon version!");
+                    }
                 } else {
                     panic!("X-Tukui-ProjectID found but no X-Tukui-ProjectFolders");
                 }
@@ -192,7 +204,211 @@ impl Grunt {
 
     /// Updates addons
     pub fn update_addons(&mut self) {
-        todo!();
+        // Get information from addon list needed to download update information
+        // Curse IDs
+        let curse_ids: Vec<(String, i64)> = self
+            .addons
+            .iter()
+            .filter(|addon| addon.addon_type() == &AddonType::Curse)
+            .map(|addon| (addon.addon_id().clone(), addon.version().parse().unwrap()))
+            .collect();
+        // Tukui IDs
+        let tukui_ids: Vec<&String> = self
+            .addons
+            .iter()
+            .filter(|addon| addon.addon_type() == &AddonType::Tukui && addon.addon_id() != "-2")
+            .map(|addon| addon.addon_id())
+            .collect();
+        // Get ElvUI addon if it exists. (Tukui special case)
+        let elvui_addon = self
+            .addons
+            .iter()
+            .find(|addon| addon.addon_type() == &AddonType::Tukui && addon.addon_id() == "-2");
+
+        // Create threads to download info for each set of IDs
+        // Curse
+        // Returns a vec of (curse id, latest id, download url)
+        let curse_thread = thread::spawn(move || {
+            let mut to_update = HashMap::new();
+            let api = CurseAPI::init(); // Bit of a hack
+            let ids: Vec<&String> = curse_ids.iter().map(|(id, _)| id).collect();
+            let addon_infos = api.get_addons_info(&ids);
+            for info in addon_infos {
+                // Get the latest version by selecting the file with the highest id (newest)
+                let latest = info
+                    .latest_files
+                    .iter()
+                    // Only look at retail files
+                    .filter(|file| file.game_version_flavor == "wow_retail")
+                    .max_by(|file_a, &file_b| file_a.id.cmp(&file_b.id))
+                    .unwrap();
+                let (curse_id, current) = curse_ids
+                    .iter()
+                    .find(|(id, _)| id == &info.id.to_string())
+                    .unwrap();
+                to_update.insert(curse_id.clone(), (latest.id, latest.download_url.clone()));
+            }
+            to_update
+        });
+        // Tukui
+        let tukui_thread = thread::spawn(move || {});
+
+        // Wait for threads to finish
+        let mut latest_curse = curse_thread.join().unwrap();
+        let latest_tukui = tukui_thread.join().unwrap();
+
+        // Find out which addons need updating
+        let mut outdated = Vec::new();
+        for (index, addon) in self.addons.iter().enumerate() {
+            match addon.addon_type() {
+                AddonType::Curse => {
+                    let current: i64 = addon.version().parse().unwrap();
+                    let (latest, url) = latest_curse.remove(addon.addon_id()).unwrap();
+                    if latest > current {
+                        outdated.push((index, url));
+                    }
+                }
+                _ => (),
+                //_ => panic!("Unknown addon type"),
+            }
+        }
+
+        // Ask user
+        // TODO: Move out of lib.rs
+        println!("{} addons to update", outdated.len());
+        outdated.iter().for_each(|(index, _)| {
+            let addon = self.addons.get(*index).unwrap();
+            println!("{}", addon.name());
+        });
+
+        // Download/unpack updates
+        let tmp_dir = tempfile::Builder::new().prefix("grunt").tempdir().unwrap();
+        outdated.par_iter().for_each(|(index, url)| {
+            // Download to temp file
+            let download_loc = tmp_dir.path().join(format!("update{}.download", index));
+            let mut file = File::create(&download_loc).unwrap();
+            let mut resp = reqwest::blocking::get(url).expect("Error downloading update");
+            std::io::copy(&mut resp, &mut file).expect("Error downloading update to temp file");
+            // Explicity close file
+            drop(file);
+
+            // Unzip downloaded file to temp dir
+            let unzip_dir = tmp_dir.path().join(format!("unpacked{}", index));
+            std::fs::create_dir(&unzip_dir).unwrap();
+            let file = File::open(&download_loc).unwrap();
+            let reader = BufReader::new(file);
+            let mut zip = zip::ZipArchive::new(reader).expect("Error reading zip");
+            // Iterate through each entry in the zip
+            for i in 0..zip.len() {
+                let mut entry = zip.by_index(i).unwrap();
+                let entry_path = entry.sanitized_name();
+                let out_path = unzip_dir.join(entry_path);
+                // Create parent dir
+                std::fs::create_dir_all(out_path.parent().unwrap()).unwrap();
+                if entry.is_dir() {
+                    // Create empty dir
+                    std::fs::create_dir(&out_path).unwrap();
+                } else {
+                    // Extract file
+                    let mut out_file = File::create(&out_path).unwrap();
+                    std::io::copy(&mut entry, &mut out_file).expect("Error extracting from zip");
+                }
+            }
+        });
+
+        // Check for dir conflicts then replace addon files
+        // First get all directory categories
+        let outdated_addons: Vec<&Addon> = outdated
+            .iter()
+            .map(|(index, _)| self.addons.get(*index).unwrap())
+            .collect();
+        let dirs_to_remove: Vec<&String> = outdated_addons
+            .iter()
+            .flat_map(|addon| addon.dirs())
+            .collect();
+        let outdated_indexes: Vec<usize> = outdated.iter().map(|(index, _)| *index).collect();
+        let untouched_dirs: Vec<&String> = self
+            .addons
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !outdated_indexes.contains(index))
+            .flat_map(|(_, addon)| addon.dirs())
+            .collect();
+        let new_dirs: Vec<String> = outdated_indexes
+            .iter()
+            .flat_map(|index| {
+                // Read all entries in unpack directory
+                let unpack_dir = tmp_dir.path().join(format!("unpacked{}", index));
+                std::fs::read_dir(&unpack_dir)
+                    .unwrap()
+                    .map(|entry| {
+                        let entry = entry.unwrap();
+                        // Panic if file
+                        if entry.path().is_file() {
+                            panic!("File found. Only directories expected in addon update zip");
+                        }
+                        entry.file_name().to_str().unwrap().to_string()
+                    })
+                    .collect::<Vec<String>>()
+            })
+            .collect();
+        // Check new dirs for duplicates
+        for (index, dir) in new_dirs.iter().enumerate() {
+            for other in new_dirs.iter().skip(index + 1) {
+                if dir == other {
+                    panic!("Dir conflict");
+                }
+            }
+        }
+        // Check new and unchanged dirs for conflicts
+        for dir in new_dirs.iter() {
+            for other in untouched_dirs.iter() {
+                if &dir == other {
+                    panic!("Dir conflict");
+                }
+            }
+        }
+        // Delete old dirs
+        for dir_name in dirs_to_remove.iter() {
+            let path = self.root_dir.join(dir_name);
+            if path.exists() {
+                std::fs::remove_dir_all(path).expect("Error deleting outdated addon");
+            }
+        }
+        // Copy new ones
+        for index in outdated_indexes.iter() {
+            let unpacked_dir = tmp_dir.path().join(format!("unpacked{}", index));
+            for entry in walkdir::WalkDir::new(&unpacked_dir) {
+                let entry = entry.unwrap();
+                let relative_path = entry.path().strip_prefix(&unpacked_dir).unwrap();
+                let new_path = self.root_dir.join(relative_path);
+                if entry.path().is_dir() {
+                    std::fs::create_dir_all(new_path);
+                } else {
+                    std::fs::create_dir_all(new_path.parent().unwrap()).unwrap();
+                    let mut reader = File::open(entry.path()).unwrap();
+                    let mut writer = File::create(new_path).unwrap();
+                    std::io::copy(&mut reader, &mut writer).expect("Error copying new addon files");
+                }
+            }
+        }
+
+        // Update addon data including updating the dirs
+        for index in outdated_indexes.iter() {
+            let addon = self.addons.get_mut(*index).unwrap();
+            let unpacked_dir = tmp_dir.path().join(format!("unpacked{}", index));
+            let new_dirs = unpacked_dir
+                .read_dir()
+                .unwrap()
+                .map(|entry| entry.unwrap())
+                .filter(|entry| entry.path().is_dir())
+                .map(|entry| entry.file_name().to_str().unwrap().to_string())
+                .collect::<Vec<String>>();
+            addon.set_dirs(new_dirs);
+        }
+
+        // Save lockfile
+        self.save_lockfile();
     }
 
     /// Check that two addons don't claim the same directory
@@ -249,17 +465,9 @@ impl Grunt {
         }
     }
 
-    /// Initializes the curse api if not initialized and returns it
-    fn get_api(&mut self) -> &CurseAPI {
-        if self.curse_api.is_none() {
-            self.curse_api = Some(CurseAPI::init());
-        }
-        self.curse_api.as_ref().unwrap()
-    }
-
     fn resolve_curse(&mut self, untracked: Vec<String>) -> Vec<Addon> {
         // Get curse info for WoW
-        let game_info = self.get_api().get_game_info(WOW_GAME_ID);
+        let game_info = self.curse_api.get_game_info(WOW_GAME_ID);
 
         // Compile regexes
         let addon_cat = &game_info.category_sections[0];
@@ -380,7 +588,7 @@ impl Grunt {
             .collect_into_vec(&mut fingerprints);
 
         // Query api for fingerprint matches
-        let results = self.get_api().fingerprint_search(&fingerprints);
+        let results = self.curse_api.fingerprint_search(&fingerprints);
 
         results
             .exact_matches
@@ -407,6 +615,23 @@ pub struct Conflict {
 pub enum ResolveProgress {
     NewAddon { name: String, desc: String },
     Finished { not_found: Vec<String> },
+}
+
+/// Get the version string from a `.toc` file
+fn get_toc_version<P>(path: P) -> String
+where
+    P: AsRef<Path>,
+{
+    let version_string = "## Version:";
+    let file = File::open(path).expect("Error opening .toc file");
+    let reader = BufReader::new(file);
+    for line in reader.lines() {
+        let line = line.unwrap();
+        if line.starts_with(version_string) {
+            return line[version_string.len()..].trim().to_string();
+        }
+    }
+    panic!("Couldn't find toc version");
 }
 
 /// Finds a case sensitive path from an insensitive path
