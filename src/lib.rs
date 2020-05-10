@@ -203,7 +203,10 @@ impl Grunt {
     }
 
     /// Updates addons
-    pub fn update_addons(&mut self) {
+    pub fn update_addons<F>(&mut self, mut check_update: F)
+    where
+        F: FnMut(Vec<Updateable>) -> Vec<Updateable>,
+    {
         // Get information from addon list needed to download update information
         // Curse IDs
         let curse_ids: Vec<(String, i64)> = self
@@ -265,7 +268,13 @@ impl Grunt {
                     let current: i64 = addon.version().parse().unwrap();
                     let (latest, url) = latest_curse.remove(addon.addon_id()).unwrap();
                     if latest > current {
-                        outdated.push((index, url));
+                        let info = Updateable {
+                            index,
+                            name: addon.name().clone(),
+                            new_version: latest.to_string(),
+                            url,
+                        };
+                        outdated.push(info);
                     }
                 }
                 _ => (),
@@ -274,26 +283,21 @@ impl Grunt {
         }
 
         // Ask user
-        // TODO: Move out of lib.rs
-        println!("{} addons to update", outdated.len());
-        outdated.iter().for_each(|(index, _)| {
-            let addon = self.addons.get(*index).unwrap();
-            println!("{}", addon.name());
-        });
+        let outdated = check_update(outdated);
 
         // Download/unpack updates
         let tmp_dir = tempfile::Builder::new().prefix("grunt").tempdir().unwrap();
-        outdated.par_iter().for_each(|(index, url)| {
+        outdated.par_iter().for_each(|upd| {
             // Download to temp file
-            let download_loc = tmp_dir.path().join(format!("update{}.download", index));
+            let download_loc = tmp_dir.path().join(format!("update{}.download", upd.index));
             let mut file = File::create(&download_loc).unwrap();
-            let mut resp = reqwest::blocking::get(url).expect("Error downloading update");
+            let mut resp = reqwest::blocking::get(&upd.url).expect("Error downloading update");
             std::io::copy(&mut resp, &mut file).expect("Error downloading update to temp file");
             // Explicity close file
             drop(file);
 
             // Unzip downloaded file to temp dir
-            let unzip_dir = tmp_dir.path().join(format!("unpacked{}", index));
+            let unzip_dir = tmp_dir.path().join(format!("unpacked{}", upd.index));
             std::fs::create_dir(&unzip_dir).unwrap();
             let file = File::open(&download_loc).unwrap();
             let reader = BufReader::new(file);
@@ -320,13 +324,13 @@ impl Grunt {
         // First get all directory categories
         let outdated_addons: Vec<&Addon> = outdated
             .iter()
-            .map(|(index, _)| self.addons.get(*index).unwrap())
+            .map(|upd| self.addons.get(upd.index).unwrap())
             .collect();
         let dirs_to_remove: Vec<&String> = outdated_addons
             .iter()
             .flat_map(|addon| addon.dirs())
             .collect();
-        let outdated_indexes: Vec<usize> = outdated.iter().map(|(index, _)| *index).collect();
+        let outdated_indexes: Vec<usize> = outdated.iter().map(|upd| upd.index).collect();
         let untouched_dirs: Vec<&String> = self
             .addons
             .iter()
@@ -383,7 +387,7 @@ impl Grunt {
                 let relative_path = entry.path().strip_prefix(&unpacked_dir).unwrap();
                 let new_path = self.root_dir.join(relative_path);
                 if entry.path().is_dir() {
-                    std::fs::create_dir_all(new_path);
+                    std::fs::create_dir_all(new_path).unwrap();
                 } else {
                     std::fs::create_dir_all(new_path.parent().unwrap()).unwrap();
                     let mut reader = File::open(entry.path()).unwrap();
@@ -394,9 +398,9 @@ impl Grunt {
         }
 
         // Update addon data including updating the dirs
-        for index in outdated_indexes.iter() {
-            let addon = self.addons.get_mut(*index).unwrap();
-            let unpacked_dir = tmp_dir.path().join(format!("unpacked{}", index));
+        for upd in outdated.into_iter() {
+            let addon = self.addons.get_mut(upd.index).unwrap();
+            let unpacked_dir = tmp_dir.path().join(format!("unpacked{}", upd.index));
             let new_dirs = unpacked_dir
                 .read_dir()
                 .unwrap()
@@ -405,10 +409,8 @@ impl Grunt {
                 .map(|entry| entry.file_name().to_str().unwrap().to_string())
                 .collect::<Vec<String>>();
             addon.set_dirs(new_dirs);
+            addon.set_version(upd.new_version);
         }
-
-        // Save lockfile
-        self.save_lockfile();
     }
 
     /// Check that two addons don't claim the same directory
@@ -604,6 +606,13 @@ impl Grunt {
             })
             .collect()
     }
+}
+
+pub struct Updateable {
+    pub index: usize,
+    pub name: String,
+    pub new_version: String,
+    pub url: String,
 }
 
 pub struct Conflict {

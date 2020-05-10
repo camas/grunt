@@ -90,7 +90,36 @@ fn main() {
     // Always save lockfile after every command that makes changes to addons
     match matches.subcommand() {
         ("setdir", _) => (), // Implemented further up
-        ("update", _) => grunt.update_addons(),
+        ("update", _) => {
+            let check_fn = |mut updateable: Vec<grunt::Updateable>| -> Vec<grunt::Updateable> {
+                println!("{} addons to update", updateable.len());
+                updateable.sort_by(|a, b| a.name.cmp(&b.name));
+                let names: Vec<(&String, bool)> =
+                    updateable.iter().map(|upd| (&upd.name, true)).collect();
+                let picked_indexes = dialoguer::MultiSelect::new()
+                    .with_prompt("Addons to update")
+                    .items_checked(&names)
+                    .paged(true)
+                    .interact()
+                    .unwrap();
+                let is_sure = dialoguer::Confirm::new()
+                    .with_prompt("Are you sure?")
+                    .interact()
+                    .unwrap();
+                if !is_sure {
+                    return Vec::new();
+                }
+                updateable
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(index, _)| picked_indexes.contains(index))
+                    .map(|(_, upd)| upd)
+                    .collect()
+            };
+            grunt.update_addons(check_fn);
+            grunt.save_lockfile();
+            println!("Addons updated");
+        }
         ("resolve", _) => {
             // Resolve
             println!("Resolving untracked addons...");
