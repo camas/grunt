@@ -16,6 +16,7 @@ pub mod settings;
 mod curse;
 mod lockfile;
 mod murmur2;
+mod tukui;
 
 #[derive(Getters, Setters)]
 #[getset(get = "pub", set = "pub")]
@@ -216,22 +217,26 @@ impl Grunt {
             .map(|addon| (addon.addon_id().clone(), addon.version().parse().unwrap()))
             .collect();
         // Tukui IDs
-        let tukui_ids: Vec<&String> = self
+        let tukui_ids: Vec<String> = self
             .addons
             .iter()
             .filter(|addon| addon.addon_type() == &AddonType::Tukui && addon.addon_id() != "-2")
-            .map(|addon| addon.addon_id())
+            .map(|addon| addon.addon_id().clone())
             .collect();
         // Get ElvUI addon if it exists. (Tukui special case)
-        let elvui_addon = self
+        let has_elvui_addon = self
             .addons
             .iter()
-            .find(|addon| addon.addon_type() == &AddonType::Tukui && addon.addon_id() == "-2");
+            .any(|addon| addon.addon_type() == &AddonType::Tukui && addon.addon_id() == "-2");
 
         // Create threads to download info for each set of IDs
         // Curse
         // Returns a vec of (curse id, latest id, download url)
         let curse_thread = thread::spawn(move || {
+            // Return early if no curse addons
+            if curse_ids.is_empty() {
+                return HashMap::new();
+            }
             let mut to_update = HashMap::new();
             let api = CurseAPI::init(); // Bit of a hack
             let ids: Vec<&String> = curse_ids.iter().map(|(id, _)| id).collect();
@@ -245,7 +250,7 @@ impl Grunt {
                     .filter(|file| file.game_version_flavor == "wow_retail")
                     .max_by(|file_a, &file_b| file_a.id.cmp(&file_b.id))
                     .unwrap();
-                let (curse_id, current) = curse_ids
+                let (curse_id, _) = curse_ids
                     .iter()
                     .find(|(id, _)| id == &info.id.to_string())
                     .unwrap();
@@ -254,33 +259,87 @@ impl Grunt {
             to_update
         });
         // Tukui
-        let tukui_thread = thread::spawn(move || {});
+        let tukui_thread = thread::spawn(move || {
+            if tukui_ids.is_empty() {
+                return HashMap::new();
+            }
+            let tukui_infos = tukui::get_addon_infos();
+            let mut map = HashMap::new();
+            for id in tukui_ids {
+                let info = tukui_infos
+                    .iter()
+                    .find(|info| info.id == id)
+                    .expect("No tukui addon with the right ID found");
+                map.insert(id, (info.version.clone(), info.url.clone()));
+            }
+            map
+        });
+        // ElvUI special case
+        let elvui_thread = thread::spawn(move || {
+            if !has_elvui_addon {
+                return ("".to_string(), "".to_string());
+            }
+            let elvui_info = tukui::get_elvui_info();
+            (elvui_info.version, elvui_info.url)
+        });
 
         // Wait for threads to finish
         let mut latest_curse = curse_thread.join().unwrap();
-        let latest_tukui = tukui_thread.join().unwrap();
+        let mut latest_tukui = tukui_thread.join().unwrap();
+        let elvui_info = elvui_thread.join().unwrap();
 
         // Find out which addons need updating
-        let mut outdated = Vec::new();
-        for (index, addon) in self.addons.iter().enumerate() {
-            match addon.addon_type() {
-                AddonType::Curse => {
-                    let current: i64 = addon.version().parse().unwrap();
-                    let (latest, url) = latest_curse.remove(addon.addon_id()).unwrap();
-                    if latest > current {
-                        let info = Updateable {
-                            index,
-                            name: addon.name().clone(),
-                            new_version: latest.to_string(),
-                            url,
-                        };
-                        outdated.push(info);
+        let outdated = self
+            .addons
+            .iter()
+            .enumerate()
+            .filter_map(|(index, addon)| {
+                let data = match addon.addon_type() {
+                    AddonType::Curse => {
+                        let current: i64 = addon.version().parse().unwrap();
+                        let (latest, url) = latest_curse.remove(addon.addon_id()).unwrap();
+                        if latest > current {
+                            Some((latest.to_string(), url))
+                        } else {
+                            None
+                        }
                     }
+                    AddonType::Tukui => {
+                        let curr = addon.version();
+                        let (latest, url) = if addon.addon_id() == "-2" {
+                            elvui_info.clone()
+                        } else {
+                            latest_tukui.remove(addon.addon_id()).unwrap()
+                        };
+
+                        if &latest > curr {
+                            Some((latest, url))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                    //_ => panic!("Unknown addon type"),
+                };
+                if let Some((version, url)) = data {
+                    Some(Updateable {
+                        index,
+                        name: addon.name().clone(),
+                        new_version: version,
+                        url,
+                    })
+                } else {
+                    None
                 }
-                _ => (),
-                //_ => panic!("Unknown addon type"),
-            }
-        }
+            })
+            .collect();
+        // let info = Updateable {
+        //     index,
+        //     name: addon.name().clone(),
+        //     new_version: latest_str,
+        //     url,
+        // };
+        // outdated.push(info);
 
         // Ask user
         let outdated = check_update(outdated);

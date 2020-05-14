@@ -92,6 +92,10 @@ fn main() {
         ("setdir", _) => (), // Implemented further up
         ("update", _) => {
             let check_fn = |mut updateable: Vec<grunt::Updateable>| -> Vec<grunt::Updateable> {
+                // Return early if no updateable addons
+                if updateable.is_empty() {
+                    return updateable;
+                }
                 println!("{} addons to update", updateable.len());
                 updateable.sort_by(|a, b| a.name.cmp(&b.name));
                 let names: Vec<(&String, bool)> =
@@ -102,6 +106,13 @@ fn main() {
                     .paged(true)
                     .interact()
                     .unwrap();
+
+                // Return early if user picks no addons to update
+                if picked_indexes.is_empty() {
+                    return Vec::new();
+                }
+
+                // Confirm selection
                 let is_sure = dialoguer::Confirm::new()
                     .with_prompt("Are you sure?")
                     .interact()
@@ -109,6 +120,8 @@ fn main() {
                 if !is_sure {
                     return Vec::new();
                 }
+
+                // Filter updateable by indexes picked and return
                 updateable
                     .into_iter()
                     .enumerate()
@@ -116,9 +129,10 @@ fn main() {
                     .map(|(_, upd)| upd)
                     .collect()
             };
+            println!("Checking for addons to update");
             grunt.update_addons(check_fn);
             grunt.save_lockfile();
-            println!("Addons updated");
+            println!("Done");
         }
         ("resolve", _) => {
             // Resolve
