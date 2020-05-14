@@ -10,6 +10,8 @@ static CURRENT_VERSION: u32 = 1;
 pub struct Settings {
     version: u32,
     default_dir: Option<String>,
+    tsm_email: Option<String>,
+    tsm_pass: Option<String>,
 }
 
 impl Default for Settings {
@@ -17,6 +19,8 @@ impl Default for Settings {
         Settings {
             version: CURRENT_VERSION,
             default_dir: None,
+            tsm_email: None,
+            tsm_pass: None,
         }
     }
 }

@@ -235,6 +235,13 @@ fn main() {
             println!("\x1B[1m{} Untracked:\x1B[0m", untracked.len());
             untracked.iter().for_each(|s| println!("{}", s));
         }
+        ("tsm", _) => {
+            grunt.update_tsm_data(
+                settings.tsm_email().as_ref().unwrap(),
+                settings.tsm_pass().as_ref().unwrap(),
+            );
+            println!("TSM data updated");
+        }
         _ => println!("No matched command"),
     }
 }

@@ -22,3 +22,7 @@ serde = { version = "*", features = ["derive"] }
 tempfile = "*" # Temporary files
 zip = "*" # Zip files
 walkdir = "*" # Directory traversal
+data-encoding = "*" # Encoding helpers
+
+[dev-dependencies]
+dotenv = "*" # Load dotenv files during testing

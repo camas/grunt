@@ -6,7 +6,7 @@ use getset::{Getters, Setters};
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
 
@@ -16,6 +16,7 @@ pub mod settings;
 mod curse;
 mod lockfile;
 mod murmur2;
+mod tsm;
 mod tukui;
 
 #[derive(Getters, Setters)]
@@ -523,6 +524,85 @@ impl Grunt {
             }
             let path = root.join(dir);
             std::fs::remove_dir_all(path).expect("Error deleting the contents of ");
+        }
+    }
+
+    /// Updates the data in TradeSkillMaster_AppHelper by using the (undocumented) tsm api
+    pub fn update_tsm_data(&self, tsm_email: &str, tsm_pass: &str) {
+        // Get TSM AppHelper addon
+        let addon = self
+            .addons
+            .iter()
+            .find(|a| a.name() == "TradeSkillMaster_AppHelper")
+            .expect("TSM AppHelper not found");
+
+        // Read current data
+        let mut current_data: HashMap<(String, String), (String, u64)> = HashMap::new();
+        let path = self.root_dir.join(addon.name()).join("AppData.lua");
+        let f = File::open(&path).unwrap();
+        for line in BufReader::new(f).lines() {
+            // Each line is of the format
+            // `{data} --<{data_type},{realm},{time}>`
+            let line = line.unwrap();
+            let mut split = line.split("--");
+            let data = split.next().unwrap().trim_end_matches(' ').into();
+            let comment_data = split
+                .next()
+                .unwrap()
+                .trim_start_matches('<')
+                .trim_end_matches('>');
+            let mut comment_split = comment_data.split(',');
+            let data_type = comment_split.next().unwrap().into();
+            let realm = comment_split.next().unwrap().into();
+            let time: u64 = comment_split.next().unwrap().parse().unwrap();
+            current_data.insert((data_type, realm), (data, time));
+        }
+
+        // Login to the tsm api
+        let mut api = tsm::TSMApi::new();
+        api.login(tsm_email, tsm_pass);
+        let status = api.get_status();
+
+        // Update to latest data
+        let time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let addon_message_str = format!(
+            "{{id={},msg=\"{}\"}}",
+            status.addon_message.id, status.addon_message.msg
+        );
+        let new_data = format!(
+            "{{version={},lastSync={},message={},news={}}}",
+            tsm::APP_VERSION,
+            time,
+            addon_message_str,
+            status.addon_news
+        );
+        current_data.insert(("APP_INFO".into(), "Global".into()), (new_data, time));
+        for region in status.regions {
+            let data = api.auctiondb("region", region.id);
+            current_data.insert(
+                ("AUCTIONDB_MARKET_DATA".into(), region.name.clone()),
+                (data, region.last_modified),
+            );
+        }
+        for realm in status.realms {
+            let data = api.auctiondb("realm", realm.master_id);
+            current_data.insert(
+                ("AUCTIONDB_MARKET_DATA".into(), realm.name.clone()),
+                (data, realm.last_modified),
+            );
+        }
+
+        // Save
+        let mut f = File::create(&path).unwrap();
+        for ((data_type, data_name), (data, time)) in current_data.iter() {
+            let line = format!(
+                "select(2, ...).LoadData(\"{}\",\"{}\",[[return {}]]) --<{},{},{}>\r\n",
+                data_type, data_name, data, data_type, data_name, time
+            );
+            f.write_all(line.as_bytes()).unwrap();
         }
     }
 
