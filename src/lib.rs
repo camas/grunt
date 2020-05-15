@@ -205,8 +205,12 @@ impl Grunt {
     }
 
     /// Updates addons
-    pub fn update_addons<F>(&mut self, mut check_update: F)
-    where
+    pub fn update_addons<F>(
+        &mut self,
+        mut check_update: F,
+        tsm_email: Option<&String>,
+        tsm_pass: Option<&String>,
+    ) where
         F: FnMut(Vec<Updateable>) -> Vec<Updateable>,
     {
         // Get information from addon list needed to download update information
@@ -229,10 +233,14 @@ impl Grunt {
             .addons
             .iter()
             .any(|addon| addon.addon_type() == &AddonType::Tukui && addon.addon_id() == "-2");
+        // TSM
+        let has_tsm_addon = self
+            .addons
+            .iter()
+            .any(|addon| addon.addon_type() == &AddonType::TSM);
 
         // Create threads to download info for each set of IDs
         // Curse
-        // Returns a vec of (curse id, latest id, download url)
         let curse_thread = thread::spawn(move || {
             // Return early if no curse addons
             if curse_ids.is_empty() {
@@ -283,11 +291,24 @@ impl Grunt {
             let elvui_info = tukui::get_elvui_info();
             (elvui_info.version, elvui_info.url)
         });
+        // TSM
+        let tsm_email = tsm_email.unwrap().clone();
+        let tsm_pass = tsm_pass.unwrap().clone();
+        let tsm_thread = thread::spawn(move || {
+            let mut tsm_api = tsm::TSMApi::new();
+            if !has_tsm_addon {
+                return (tsm_api, tsm::StatusRespData::default());
+            }
+            tsm_api.login(&tsm_email, &tsm_pass);
+            let status = tsm_api.get_status();
+            (tsm_api, status)
+        });
 
         // Wait for threads to finish
         let mut latest_curse = curse_thread.join().unwrap();
         let mut latest_tukui = tukui_thread.join().unwrap();
         let elvui_info = elvui_thread.join().unwrap();
+        let (tsm_api, tsm_status) = tsm_thread.join().unwrap();
 
         // Find out which addons need updating
         let outdated = self
@@ -319,8 +340,19 @@ impl Grunt {
                             None
                         }
                     }
-                    _ => None,
-                    //_ => panic!("Unknown addon type"),
+                    AddonType::TSM => {
+                        let latest_ver = &tsm_status
+                            .addons
+                            .iter()
+                            .find(|data| &data.name == addon.name())
+                            .unwrap()
+                            .version_str;
+                        if addon.version() != latest_ver {
+                            Some((latest_ver.clone(), "tsm".to_string()))
+                        } else {
+                            None
+                        }
+                    }
                 };
                 if let Some((version, url)) = data {
                     Some(Updateable {
@@ -334,13 +366,6 @@ impl Grunt {
                 }
             })
             .collect();
-        // let info = Updateable {
-        //     index,
-        //     name: addon.name().clone(),
-        //     new_version: latest_str,
-        //     url,
-        // };
-        // outdated.push(info);
 
         // Ask user
         let outdated = check_update(outdated);
@@ -348,13 +373,16 @@ impl Grunt {
         // Download/unpack updates
         let tmp_dir = tempfile::Builder::new().prefix("grunt").tempdir().unwrap();
         outdated.par_iter().for_each(|upd| {
-            // Download to temp file
             let download_loc = tmp_dir.path().join(format!("update{}.download", upd.index));
-            let mut file = File::create(&download_loc).unwrap();
-            let mut resp = reqwest::blocking::get(&upd.url).expect("Error downloading update");
-            std::io::copy(&mut resp, &mut file).expect("Error downloading update to temp file");
-            // Explicity close file
-            drop(file);
+            if upd.url == "tsm" {
+                // Use api
+                tsm_api.addon(&upd.name, &download_loc);
+            } else {
+                // Download to temp file
+                let mut file = File::create(&download_loc).unwrap();
+                let mut resp = reqwest::blocking::get(&upd.url).expect("Error downloading update");
+                std::io::copy(&mut resp, &mut file).expect("Error downloading update to temp file");
+            }
 
             // Unzip downloaded file to temp dir
             let unzip_dir = tmp_dir.path().join(format!("unpacked{}", upd.index));

@@ -130,7 +130,11 @@ fn main() {
                     .collect()
             };
             println!("Checking for addons to update");
-            grunt.update_addons(check_fn);
+            grunt.update_addons(
+                check_fn,
+                settings.tsm_email().as_ref(),
+                settings.tsm_pass().as_ref(),
+            );
             grunt.save_lockfile();
             println!("Done");
         }
